@@ -9,64 +9,66 @@ interface EditPlayerNameProps {
 
 const EditPlayerName: React.FC<EditPlayerNameProps> = ({ player, onSave, onCancel }) => {
   const [name, setName] = useState(player.name);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!name.trim()) {
-      setError('Name cannot be empty');
-      return;
+    if (name.trim()) {
+      onSave(player.id, name.trim());
     }
-
-    onSave(player.id, name.trim());
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4">
-        <h3 className="text-xl font-bold mb-4">Edit Player Name</h3>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md transform transition-all">
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-gray-100">
+          <h2 className="text-2xl font-bold text-gray-800">Edit Player Name</h2>
+          <p className="text-gray-500 mt-1">Change the display name for this player</p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-8">
+          <div className="mb-6">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Name
             </label>
             <input
               type="text"
+              id="name"
               value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setError(null);
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                       focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              maxLength={20}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 
+                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                       transition-all duration-200
+                       text-gray-800 text-lg
+                       placeholder-gray-400"
+              placeholder="Enter player name"
               autoFocus
             />
           </div>
 
-          {error && (
-            <div className="text-red-600 text-sm font-medium bg-red-50 p-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
+          {/* Buttons */}
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700
-                       hover:bg-gray-50 transition-colors font-medium"
+              className="flex-1 px-6 py-3 rounded-xl border border-gray-200
+                       text-gray-600 font-medium
+                       hover:bg-gray-50 hover:border-gray-300
+                       transition-all duration-200"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg
-                       hover:bg-blue-700 transition-colors font-medium"
+              className="flex-1 px-6 py-3 rounded-xl
+                       bg-blue-500 text-white font-medium
+                       hover:bg-blue-600
+                       transition-all duration-200
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!name.trim()}
             >
-              Save
+              Save Changes
             </button>
           </div>
         </form>
