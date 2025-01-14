@@ -7,6 +7,7 @@ import TutorialOverlay from './TutorialOverlay';
 import PlayerNameForm from './PlayerNameForm';
 import EditPlayerName from './EditPlayerName';
 import TrickAnimation from './TrickAnimation';
+import GameHistoryViewer from './GameHistoryViewer';
 
 interface CardProps {
   card: CardType;
@@ -278,6 +279,7 @@ const GameBoard: React.FC = () => {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [showTrickAnimation, setShowTrickAnimation] = useState(false);
   const [trickWinner, setTrickWinner] = useState<string>('');
+  const [showHistory, setShowHistory] = useState(false);
 
   // Add keyboard shortcut handler
   useEffect(() => {
@@ -419,6 +421,49 @@ const GameBoard: React.FC = () => {
     setEditingPlayer(null);
   };
 
+  // Add this function to prepare trick history data
+  const getTrickHistory = () => {
+    return state.tricks.map((trick, index) => {
+      const firstPlayerIndex = (state.currentDealer + 1 + (index * 4)) % 4;
+      const winningPlayerIndex = determineTrickWinnerIndex(trick);
+      return {
+        cards: trick,
+        winningPlayerName: players[winningPlayerIndex]?.name || '',
+        leadPlayerName: players[firstPlayerIndex]?.name || '',
+        trumpSuit: state.trumpSuit!
+      };
+    });
+  };
+
+  // Helper function to determine the winning player index
+  const determineTrickWinnerIndex = (trick: CardType[]): number => {
+    if (!trick.length || !state.trumpSuit) return 0;
+    
+    let winningCard = trick[0];
+    let winningIndex = 0;
+    const leadSuit = trick[0].suit;
+
+    trick.forEach((card, index) => {
+      if (card.suit === state.trumpSuit && winningCard.suit !== state.trumpSuit) {
+        winningCard = card;
+        winningIndex = index;
+      } else if (card.suit === state.trumpSuit && winningCard.suit === state.trumpSuit) {
+        if (getRankValue(card.rank) > getRankValue(winningCard.rank)) {
+          winningCard = card;
+          winningIndex = index;
+        }
+      } else if (card.suit === leadSuit && winningCard.suit === leadSuit) {
+        if (getRankValue(card.rank) > getRankValue(winningCard.rank)) {
+          winningCard = card;
+          winningIndex = index;
+        }
+      }
+    });
+
+    const firstPlayer = (state.currentDealer + 1) % 4;
+    return (firstPlayer + winningIndex) % 4;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-900 to-green-800 p-8">
       <div className="max-w-6xl mx-auto relative">
@@ -481,6 +526,23 @@ const GameBoard: React.FC = () => {
                       <span className="text-sm text-blue-100 font-medium">Learn how to play</span>
                     </div>
                     <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">❔</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowSidebar(false);
+                      setShowHistory(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-6 py-5 rounded-2xl
+                             hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 
+                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
+                             flex items-center justify-between group"
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Game History</span>
+                      <span className="text-sm text-indigo-100 font-medium">Review previous tricks</span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">📜</span>
                   </button>
 
                   <button
@@ -860,6 +922,13 @@ const GameBoard: React.FC = () => {
         )}
 
         <TutorialOverlay />
+
+        {/* Add GameHistoryViewer component */}
+        <GameHistoryViewer
+          tricks={getTrickHistory()}
+          isOpen={showHistory}
+          onClose={() => setShowHistory(false)}
+        />
       </div>
     </div>
   );
