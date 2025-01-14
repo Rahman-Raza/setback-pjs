@@ -66,7 +66,8 @@ const initialHistoryState: HistoryState = {
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 type GameAction =
-  | { type: 'INITIALIZE_GAME'; payload: { playerNames: string[] } }
+  | { type: 'INITIALIZE_GAME'; payload: { players: Player[]; partnerships: [Partnership, Partnership] } }
+  | { type: 'ADD_TRICK'; payload: Card[] }
   | { type: 'RESTORE_STATE'; payload: { partnerships: [Partnership, Partnership] } }
   | { type: 'DEAL_CARDS' }
   | { type: 'PLACE_BID'; payload: Bid }
@@ -126,29 +127,18 @@ function gameReducer(state: HistoryState, action: GameAction): HistoryState {
 // Separate reducer for handling game state updates
 function gameStateReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case 'INITIALIZE_GAME': {
-      const players = action.payload.playerNames.map((name, index) => ({
-        id: `player-${index}`,
-        name,
-        hand: [] as Card[],
-        isDealer: index === 0,
-        position: index as 0 | 1 | 2 | 3,
-      }));
-
-      const partnerships: [Partnership, Partnership] = [
-        { players: [players[0], players[2]] as [Player, Player], score: 0 },
-        { players: [players[1], players[3]] as [Player, Player], score: 0 },
-      ];
-
+    case 'INITIALIZE_GAME':
       return {
         ...initialState,
-        players,
-        partnerships,
-        phase: 'dealing',
-        currentDealer: 0,
+        players: action.payload.players,
+        partnerships: action.payload.partnerships,
+        phase: 'dealing'
       };
-    }
-
+    case 'ADD_TRICK':
+      return {
+        ...state,
+        tricks: [...state.tricks, action.payload]
+      };
     case 'RESTORE_STATE': {
       return {
         ...state,
@@ -389,71 +379,49 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // Load saved state after mounting
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedState = sessionStorage.getItem('setbackGameState');
+    if (typeof window !== 'undefined' && mounted) {
+      const savedState = sessionStorage.getItem('gameState');
       if (savedState) {
         try {
-          const parsedState = JSON.parse(savedState);
-          if (parsedState.players.length > 0) {
+          const parsedState = JSON.parse(savedState) as GameState;
+          // Validate that parsedState has the expected structure
+          if (parsedState && 
+              typeof parsedState === 'object' && 
+              parsedState.players && 
+              Array.isArray(parsedState.players) && 
+              parsedState.players.length > 0) {
             // Initialize game with saved players
-            dispatch({ 
-              type: 'INITIALIZE_GAME', 
-              payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
-            });
-
-            // Restore partnerships
             dispatch({
-              type: 'RESTORE_STATE',
-              payload: { partnerships: parsedState.partnerships }
-            });
-
-            // Restore the deck and deal cards if needed
-            if (parsedState.phase !== 'dealing') {
-              dispatch({ type: 'DEAL_CARDS' });
-              
-              // Restore player hands
-              parsedState.players.forEach((player: Player, index: number) => {
-                dispatch({
-                  type: 'RESTORE_HAND',
-                  payload: { playerId: `player-${index}`, cards: player.hand }
-                });
-              });
-            }
-
-            // Restore other state properties
-            if (parsedState.trumpSuit) {
-              dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
-            }
-
-            // Restore bids
-            parsedState.bids.forEach((bid: Bid) => {
-              dispatch({ type: 'PLACE_BID', payload: bid });
-            });
-
-            // Restore tricks
-            parsedState.tricks.forEach((trick: Card[]) => {
-              trick.forEach((card: Card) => {
-                const playerId = parsedState.players[parsedState.currentPlayer].id;
-                dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
-              });
-              if (trick.length === 4) {
-                dispatch({ type: 'COMPLETE_TRICK' });
+              type: 'INITIALIZE_GAME',
+              payload: {
+                players: parsedState.players,
+                partnerships: parsedState.partnerships as [Partnership, Partnership]
               }
             });
 
-            // Restore current trick
-            parsedState.currentTrick.forEach((card: Card) => {
-              const playerId = parsedState.players[parsedState.currentPlayer].id;
-              dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
-            });
+            // Restore other game state if available
+            if (parsedState.trumpSuit) {
+              dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
+            }
+            if (parsedState.bids && parsedState.bids.length > 0) {
+              parsedState.bids.forEach((bid: Bid) => {
+                dispatch({ type: 'PLACE_BID', payload: bid });
+              });
+            }
+            if (parsedState.tricks && parsedState.tricks.length > 0) {
+              parsedState.tricks.forEach((trick: Card[]) => {
+                dispatch({ type: 'ADD_TRICK', payload: trick });
+              });
+            }
           }
         } catch (error) {
-          console.error('Error loading saved game state:', error);
+          console.error('Error parsing saved game state:', error);
+          sessionStorage.removeItem('gameState');
         }
       }
       setMounted(true);
     }
-  }, []);
+  }, [mounted]);
 
   // Save state to session storage whenever it changes, but only after mounted
   useEffect(() => {
@@ -463,11 +431,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state, mounted]);
 
   const initializeGame = (playerNames: string[]) => {
-    console.log('Initializing game with players:', playerNames);
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('setbackGameState');
-    }
-    dispatch({ type: 'INITIALIZE_GAME', payload: { playerNames } });
+    const players = playerNames.map((name, index) => ({
+      id: `player-${index}`,
+      name,
+      hand: [] as Card[],
+      isDealer: index === 0,
+      position: index as 0 | 1 | 2 | 3,
+    }));
+
+    const partnerships: [Partnership, Partnership] = [
+      { players: [players[0], players[2]] as [Player, Player], score: 0 },
+      { players: [players[1], players[3]] as [Player, Player], score: 0 },
+    ];
+
+    dispatch({
+      type: 'INITIALIZE_GAME',
+      payload: {
+        players,
+        partnerships
+      }
+    });
   };
 
   const dealCards = () => {
