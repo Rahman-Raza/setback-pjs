@@ -683,9 +683,9 @@ const GameBoard: React.FC = () => {
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl
                           border border-white/20 transition-all hover:scale-105">
               <div className="text-white text-center">
-                <div className="text-lg font-medium text-white/80 mb-2">Trump Suit</div>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-3xl font-bold capitalize">{trumpSuit}</span>
+                <div className="text-lg font-semibold text-white/90 uppercase tracking-wider mb-3">Trump Suit</div>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-3xl font-extrabold tracking-wide capitalize">{trumpSuit}</span>
                   <span className={`text-4xl ${trumpSuit === 'hearts' || trumpSuit === 'diamonds' ? 'text-red-400' : 'text-white'}`}>
                     {(() => {
                       switch (trumpSuit) {
@@ -706,15 +706,19 @@ const GameBoard: React.FC = () => {
         {/* Game phase and status */}
         {players.length > 0 && (
           <div className="flex justify-between items-start gap-8 mb-8">
-            <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl">
+            <div className="flex-1 bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20 transition-all duration-300 hover:bg-white/15">
               <div className="text-white text-center">
-                <h1 className="text-3xl font-bold">{phase.charAt(0).toUpperCase() + phase.slice(1)} Phase</h1>
+                <h1 className="text-5xl font-extrabold mb-4 bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent tracking-tight">
+                  {phase.charAt(0).toUpperCase() + phase.slice(1)} Phase
+                </h1>
                 {currentBid && (
-                  <div className="text-xl mt-3 font-medium flex items-center justify-center gap-2">
-                    <span className="text-white/80">Current Bid:</span>
-                    <span className="font-bold bg-white/20 px-3 py-1 rounded-lg">{currentBid.points}</span>
-                    <span className="text-white/80">by</span>
-                    <span className="font-bold bg-white/20 px-3 py-1 rounded-lg">
+                  <div className="text-2xl mt-6 font-medium flex items-center justify-center gap-4">
+                    <span className="text-white/80 tracking-wide">Current Bid:</span>
+                    <span className="font-bold bg-white/20 px-5 py-2.5 rounded-xl shadow-inner backdrop-blur-sm tracking-wider">
+                      {currentBid.points}
+                    </span>
+                    <span className="text-white/80 tracking-wide">by</span>
+                    <span className="font-bold bg-white/20 px-5 py-2.5 rounded-xl shadow-inner backdrop-blur-sm tracking-wide">
                       {players.find(p => p.id === currentBid.playerId)?.name}
                     </span>
                   </div>
@@ -723,15 +727,25 @@ const GameBoard: React.FC = () => {
 
               {/* Bidding history */}
               {phase === 'bidding' && bids.length > 0 && (
-                <div className="text-white/90 text-lg mt-4 text-center font-medium border-t border-white/20 pt-4">
-                  <span className="text-white/70 mr-2">Previous bids:</span>
+                <div className="text-white/90 text-lg mt-8 text-center font-medium border-t border-white/20 pt-6">
+                  <span className="text-white/80 mr-4 tracking-wide uppercase text-sm font-semibold">Previous bids:</span>
                   {bids.map((bid, i) => (
                     <span key={i} className="inline-flex items-center">
-                      <span className="font-bold">{players.find(p => p.id === bid.playerId)?.name}</span>
-                      <span className={`mx-1 px-2 py-0.5 rounded ${bid.pass ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'}`}>
+                      <span className="font-bold tracking-wide">{players.find(p => p.id === bid.playerId)?.name}</span>
+                      <span className={`mx-2 px-4 py-1.5 rounded-xl text-base ${
+                        bid.pass 
+                          ? 'bg-red-500/20 text-red-100 border border-red-500/30' 
+                          : 'bg-green-500/20 text-green-100 border border-green-500/30'
+                      }`}>
                         {bid.pass ? 'Pass' : bid.points}
                       </span>
-                      {i < bids.length - 1 && <span className="mx-2 text-white/50">→</span>}
+                      {i < bids.length - 1 && (
+                        <span className="mx-4 text-white/40">
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -740,28 +754,31 @@ const GameBoard: React.FC = () => {
           </div>
         )}
 
-        {/* Partnership scores with edit functionality */}
+        {/* Partnership scores */}
         <div className="flex justify-center gap-8 mb-12" data-tutorial="partnerships">
           {partnerships.map((partnership, index) => (
             <div key={index} 
-                 className="bg-white/10 backdrop-blur-sm rounded-xl p-6 shadow-xl 
-                          border border-white/20 transition-transform hover:scale-105">
-              <div className="text-xl font-bold mb-3 text-white">
+                 className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl 
+                  border border-white/20 transition-all duration-300 
+                  hover:bg-white/15 hover:scale-102">
+              <div className="text-xl font-semibold mb-3 text-white/90 uppercase tracking-wider">
                 Partnership {index + 1}
               </div>
-              <div className="text-3xl font-bold mb-2 text-white">
+              <div className="text-5xl font-extrabold mb-5 bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent tracking-tight">
                 {partnership.score} points
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {partnership.players.map((player, playerIndex) => (
                   <div key={`${partnership.players[0].id}-${partnership.players[1].id}-${playerIndex}`} 
-                       className="flex items-center gap-2 text-white/80 font-medium">
+                       className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingPlayer(player)}
-                      className="hover:text-white transition-colors flex items-center gap-1"
+                      className="text-white/90 hover:text-white transition-all duration-200 
+                               flex items-center gap-2 px-4 py-2 rounded-lg 
+                               hover:bg-white/10 font-medium tracking-wide"
                     >
                       <span>{player.name}</span>
-                      <span className="text-xs opacity-60">✎</span>
+                      <span className="text-xs opacity-60 group-hover:opacity-100">✎</span>
                     </button>
                   </div>
                 ))}
@@ -773,11 +790,11 @@ const GameBoard: React.FC = () => {
         {/* Bidding UI */}
         {phase === 'bidding' && (
           <div className="flex flex-col items-center gap-6 mb-12" data-tutorial="bidding-ui">
-            <div className="text-white text-xl font-medium">
-              {players[currentPlayer]?.name}&apos;s turn to bid
+            <div className="text-white text-xl tracking-wide">
+              <span className="font-semibold">{players[currentPlayer]?.name}&apos;s</span> turn to bid
               {highestBid && (
-                <span className="ml-2 text-white/80">
-                  (must bid {minBid} or higher, or pass)
+                <span className="ml-3 text-white/80">
+                  (must bid <span className="font-medium">{minBid}</span> or higher, or pass)
                 </span>
               )}
             </div>
