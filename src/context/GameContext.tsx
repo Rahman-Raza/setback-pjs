@@ -210,19 +210,68 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'PLACE_BID': {
       const newBids = [...state.bids, action.payload];
-      const allPassed = newBids.length === 4 && newBids.every(bid => bid.pass);
-      const biddingComplete = newBids.length === 4 || newBids.some(bid => bid.points === 6);
       
+      // Get the last 4 bids (or fewer if less than 4 bids total)
+      const recentBids = newBids.slice(Math.max(0, newBids.length - 4));
+      const allPassedInRound = recentBids.length === 4 && recentBids.every(bid => bid.pass);
+      const hasBidSix = newBids.some(bid => bid.points === 6);
+      
+      // If everyone passed in this round, dealer must bid 2
+      if (allPassedInRound) {
+        const dealerBid = { playerId: state.players[state.currentDealer].id, points: 2, pass: false };
+        return {
+          ...state,
+          bids: [...newBids, dealerBid],
+          currentBid: dealerBid,
+          currentPlayer: state.currentDealer, // Dealer starts since they were forced to bid
+          phase: 'playing'
+        };
+      }
+      
+      // Bidding is complete if someone bid 6
+      if (hasBidSix) {
+        const winningBid = newBids.find(bid => bid.points === 6)!;
+        const winningPlayer = state.players.findIndex(p => p.id === winningBid.playerId);
+        return {
+          ...state,
+          bids: newBids,
+          currentBid: winningBid,
+          currentPlayer: winningPlayer,
+          phase: 'playing'
+        };
+      }
+      
+      // Check if this was the last bid in a round where someone bid
+      const hasCompletedRound = newBids.length >= 4;
+      if (hasCompletedRound) {
+        const lastFourBids = newBids.slice(-4);
+        const allPassed = lastFourBids.every(bid => bid.pass);
+        if (!allPassed) {
+          // Find the highest bid in the completed round
+          const highestBid = newBids.reduce((highest, current) => 
+            !current.pass && (!highest || current.points > highest.points) ? current : highest
+          , null as Bid | null);
+          
+          if (highestBid) {
+            const winningPlayer = state.players.findIndex(p => p.id === highestBid.playerId);
+            return {
+              ...state,
+              bids: newBids,
+              currentBid: highestBid,
+              currentPlayer: winningPlayer,
+              phase: 'playing'
+            };
+          }
+        }
+      }
+      
+      // Otherwise, continue bidding
       return {
         ...state,
         bids: newBids,
         currentBid: action.payload.pass ? state.currentBid : action.payload,
         currentPlayer: (state.currentPlayer + 1) % 4,
-        phase: biddingComplete ? 'playing' : 'bidding',
-        // If everyone passes, dealer must bid 2
-        ...(allPassed && {
-          currentBid: { playerId: state.players[state.currentDealer].id, points: 2, pass: false }
-        }),
+        phase: 'bidding'
       };
     }
 
