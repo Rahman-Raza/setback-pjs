@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTutorial } from '../context/TutorialContext';
-import { Card as CardType, Partnership } from '../types/game';
-import { calculateHandPoints } from '../utils/cardUtils';
+import { Card as CardType, Partnership, Player } from '../types/game';
+import { calculateHandPoints, getRankValue } from '../utils/cardUtils';
 import TutorialOverlay from './TutorialOverlay';
+import PlayerNameForm from './PlayerNameForm';
+import EditPlayerName from './EditPlayerName';
+import TrickAnimation from './TrickAnimation';
 
 interface CardProps {
   card: CardType;
@@ -260,30 +263,33 @@ const GameBoard: React.FC = () => {
     initializeGame,
     completeTrick,
     exportGameState,
-    importGameState
+    importGameState,
+    updatePlayerName
   } = useGame();
   const { startTutorial } = useTutorial();
   const { currentPlayer, phase, players, currentTrick, trumpSuit, partnerships, currentBid, bids } = state;
   const [showScoringDialog, setShowScoringDialog] = useState(false);
   const [lastHandPoints, setLastHandPoints] = useState<ScoringDialogProps['points'] | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [showTrickAnimation, setShowTrickAnimation] = useState(false);
+  const [trickWinner, setTrickWinner] = useState<string>('');
 
-  const handleStartGame = (withTutorial: boolean) => {
-    console.log('Starting game...');
-    // Initialize game first
-    initializeGame(['North', 'East', 'South', 'West']);
-    
-    // Start tutorial if requested
-    if (withTutorial) {
-      console.log('Starting tutorial...');
-      startTutorial(state);
-    }
+  const handleStartGame = (playerNames: string[]) => {
+    console.log('Starting game with players:', playerNames);
+    // Initialize game with custom player names
+    initializeGame(playerNames);
     
     // Deal cards after a short delay to ensure initialization is complete
     setTimeout(() => {
       console.log('Dealing initial cards...');
       dealCards();
     }, 100);
+  };
+
+  const handleStartTutorial = () => {
+    console.log('Starting tutorial...');
+    startTutorial(state);
   };
 
   const handleCardClick = (card: CardType) => {
@@ -307,7 +313,46 @@ const GameBoard: React.FC = () => {
     dealCards();
   };
 
+  const determineTrickWinner = (trick: CardType[]): string => {
+    if (!trick.length || !trumpSuit) return '';
+    
+    let winningCard = trick[0];
+    let winningIndex = 0;
+    const leadSuit = trick[0].suit;
+
+    trick.forEach((card, index) => {
+      if (card.suit === trumpSuit && winningCard.suit !== trumpSuit) {
+        winningCard = card;
+        winningIndex = index;
+      } else if (card.suit === trumpSuit && winningCard.suit === trumpSuit) {
+        if (getRankValue(card.rank) > getRankValue(winningCard.rank)) {
+          winningCard = card;
+          winningIndex = index;
+        }
+      } else if (card.suit === leadSuit && winningCard.suit === leadSuit) {
+        if (getRankValue(card.rank) > getRankValue(winningCard.rank)) {
+          winningCard = card;
+          winningIndex = index;
+        }
+      }
+    });
+
+    // Calculate which player won based on the first player and winning index
+    const firstPlayer = (currentPlayer - trick.length + 4) % 4;
+    const winningPlayer = (firstPlayer + winningIndex) % 4;
+    return players[winningPlayer]?.name || '';
+  };
+
   const handleCompleteTrick = () => {
+    if (currentTrick.length === 4) {
+      const winner = determineTrickWinner(currentTrick);
+      setTrickWinner(winner);
+      setShowTrickAnimation(true);
+    }
+  };
+
+  const handleAnimationComplete = () => {
+    setShowTrickAnimation(false);
     if (state.tricks.length === 5 && state.currentTrick.length === 4) {
       // This is the last trick of the hand
       const points = calculateHandPoints([...state.tricks, state.currentTrick], state.trumpSuit!);
@@ -340,7 +385,12 @@ const GameBoard: React.FC = () => {
 
   const handleResetGame = () => {
     setShowSidebar(false);
-    handleStartGame(false);
+    handleStartGame(['North', 'East', 'South', 'West']);
+  };
+
+  const handleEditPlayerName = (playerId: string, newName: string) => {
+    updatePlayerName(playerId, newName);
+    setEditingPlayer(null);
   };
 
   return (
@@ -536,7 +586,7 @@ const GameBoard: React.FC = () => {
           </div>
         )}
 
-        {/* Partnership scores */}
+        {/* Partnership scores with edit functionality */}
         <div className="flex justify-center gap-8 mb-12" data-tutorial="partnerships">
           {partnerships.map((partnership, index) => (
             <div key={index} 
@@ -548,8 +598,19 @@ const GameBoard: React.FC = () => {
               <div className="text-3xl font-bold mb-2 text-white">
                 {partnership.score} points
               </div>
-              <div className="text-white/80 font-medium">
-                {partnership.players.map(player => player.name).join(' & ')}
+              <div className="space-y-2">
+                {partnership.players.map((player, playerIndex) => (
+                  <div key={`${partnership.players[0].id}-${partnership.players[1].id}-${playerIndex}`} 
+                       className="flex items-center gap-2 text-white/80 font-medium">
+                    <button
+                      onClick={() => setEditingPlayer(player)}
+                      className="hover:text-white transition-colors flex items-center gap-1"
+                    >
+                      <span>{player.name}</span>
+                      <span className="text-xs opacity-60">✎</span>
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -656,7 +717,7 @@ const GameBoard: React.FC = () => {
                 Winner: Partnership {partnerships[0].score > partnerships[1].score ? '1' : '2'}
               </p>
               <button
-                onClick={() => handleStartGame(false)}
+                onClick={() => handleStartGame(['North', 'East', 'South', 'West'])}
                 className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white 
                          px-8 py-4 rounded-xl text-xl font-bold shadow-lg
                          hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
@@ -685,32 +746,14 @@ const GameBoard: React.FC = () => {
         {/* Welcome screen */}
         {players.length === 0 && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-30">
-            <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
-              <h2 className="text-3xl font-bold mb-4 text-center">Welcome to Setback!</h2>
-              <p className="text-gray-600 text-lg mb-8 text-center">
-                Would you like to learn how to play with our interactive tutorial?
-              </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-4">
-                <button
-                  onClick={() => handleStartGame(true)}
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 text-white 
-                           px-8 py-4 rounded-xl text-lg font-bold shadow-lg
-                           hover:from-blue-600 hover:to-blue-700 
-                           transition-all duration-200 transform hover:scale-105"
-                >
-                  Start Tutorial
-                </button>
-                <button
-                  onClick={() => handleStartGame(false)}
-                  className="bg-gradient-to-r from-gray-500 to-gray-600 text-white 
-                           px-8 py-4 rounded-xl text-lg font-bold shadow-lg
-                           hover:from-gray-600 hover:to-gray-700 
-                           transition-all duration-200 transform hover:scale-105"
-                >
-                  Skip Tutorial
-                </button>
-              </div>
-            </div>
+            <PlayerNameForm
+              onSubmit={handleStartGame}
+              onStartTutorial={() => {
+                handleStartGame(['North', 'East', 'South', 'West']);
+                handleStartTutorial();
+              }}
+              onSkipTutorial={() => handleStartGame(['North', 'East', 'South', 'West'])}
+            />
           </div>
         )}
 
@@ -720,6 +763,24 @@ const GameBoard: React.FC = () => {
             points={lastHandPoints}
             partnerships={partnerships}
             onClose={handleNextHand}
+          />
+        )}
+
+        {/* Edit player name dialog */}
+        {editingPlayer && (
+          <EditPlayerName
+            player={editingPlayer}
+            onSave={handleEditPlayerName}
+            onCancel={() => setEditingPlayer(null)}
+          />
+        )}
+
+        {/* Add TrickAnimation */}
+        {showTrickAnimation && (
+          <TrickAnimation
+            cards={currentTrick}
+            winningPlayerName={trickWinner}
+            onComplete={handleAnimationComplete}
           />
         )}
 
