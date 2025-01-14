@@ -321,6 +321,15 @@ const GameBoard: React.FC = () => {
     const leadSuit = trick[0].suit;
 
     trick.forEach((card, index) => {
+      // Handle joker
+      if (card.isJoker) {
+        winningCard = card;
+        winningIndex = index;
+        return;
+      }
+      if (winningCard.isJoker) return;
+
+      // Handle trump
       if (card.suit === trumpSuit && winningCard.suit !== trumpSuit) {
         winningCard = card;
         winningIndex = index;
@@ -338,9 +347,9 @@ const GameBoard: React.FC = () => {
     });
 
     // Calculate which player won based on the first player and winning index
-    const firstPlayer = (currentPlayer - trick.length + 4) % 4;
-    const winningPlayer = (firstPlayer + winningIndex) % 4;
-    return players[winningPlayer]?.name || '';
+    const firstPlayerIndex = (currentPlayer - trick.length + 4) % 4;
+    const winningPlayerIndex = (firstPlayerIndex + winningIndex) % 4;
+    return players[winningPlayerIndex]?.name || '';
   };
 
   const handleCompleteTrick = () => {
