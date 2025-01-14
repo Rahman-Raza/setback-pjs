@@ -12,6 +12,7 @@ interface GameContextType {
   completeTrick: () => void;
   exportGameState: () => void;
   importGameState: (file: File) => void;
+  updatePlayerName: (playerId: string, newName: string) => void;
 }
 
 const defaultPlayer: Player = {
@@ -57,7 +58,8 @@ type GameAction =
   | { type: 'SET_TRUMP'; payload: Suit }
   | { type: 'COMPLETE_TRICK' }
   | { type: 'SCORE_HAND' }
-  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } };
+  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
+  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -267,6 +269,51 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'UPDATE_PLAYER_NAME': {
+      const { playerId, newName } = action.payload;
+      const playerIndex = state.players.findIndex(p => p.id === playerId);
+      
+      if (playerIndex === -1) return state;
+
+      const newPlayers = [...state.players];
+      newPlayers[playerIndex] = {
+        ...newPlayers[playerIndex],
+        name: newName,
+      };
+
+      // Update partnerships to reflect the name change
+      const newPartnerships: [Partnership, Partnership] = [
+        {
+          ...state.partnerships[0],
+          players: [
+            state.partnerships[0].players[0].id === playerId 
+              ? { ...state.partnerships[0].players[0], name: newName }
+              : state.partnerships[0].players[0],
+            state.partnerships[0].players[1].id === playerId
+              ? { ...state.partnerships[0].players[1], name: newName }
+              : state.partnerships[0].players[1],
+          ] as [Player, Player],
+        },
+        {
+          ...state.partnerships[1],
+          players: [
+            state.partnerships[1].players[0].id === playerId
+              ? { ...state.partnerships[1].players[0], name: newName }
+              : state.partnerships[1].players[0],
+            state.partnerships[1].players[1].id === playerId
+              ? { ...state.partnerships[1].players[1], name: newName }
+              : state.partnerships[1].players[1],
+          ] as [Player, Player],
+        },
+      ];
+
+      return {
+        ...state,
+        players: newPlayers,
+        partnerships: newPartnerships,
+      };
+    }
+
     default:
       return state;
   }
@@ -456,6 +503,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updatePlayerName = (playerId: string, newName: string) => {
+    dispatch({ type: 'UPDATE_PLAYER_NAME', payload: { playerId, newName } });
+  };
+
   // Always render with initial state on first mount to avoid hydration mismatch
   if (!mounted) {
     return (
@@ -468,7 +519,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setTrump,
         completeTrick,
         exportGameState,
-        importGameState
+        importGameState,
+        updatePlayerName
       }}>
         {children}
       </GameContext.Provider>
@@ -485,7 +537,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setTrump,
       completeTrick,
       exportGameState,
-      importGameState
+      importGameState,
+      updatePlayerName
     }}>
       {children}
     </GameContext.Provider>

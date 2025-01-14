@@ -63,12 +63,15 @@ export function isHigherCard(card1: Card, card2: Card, leadSuit: Suit, trumpSuit
   return getRankValue(card1.rank) > getRankValue(card2.rank);
 }
 
-function getRankValue(rank: Rank): number {
-  const rankOrder: Record<Rank, number> = {
-    '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
-    '10': 10, 'jack': 11, 'queen': 12, 'king': 13, 'ace': 14, 'joker': 15
-  };
-  return rankOrder[rank];
+export function getRankValue(rank: string): number {
+  switch (rank.toLowerCase()) {
+    case 'ace': return 14;
+    case 'king': return 13;
+    case 'queen': return 12;
+    case 'jack': return 11;
+    case '10': return 10;
+    default: return parseInt(rank) || 0;
+  }
 }
 
 export function calculateTrickWinner(trick: Card[], leadSuit: Suit, trumpSuit: Suit): number {
