@@ -53,12 +53,11 @@ type GameAction =
   | { type: 'INITIALIZE_GAME'; payload: { playerNames: string[] } }
   | { type: 'RESTORE_STATE'; payload: { partnerships: [Partnership, Partnership] } }
   | { type: 'DEAL_CARDS' }
+  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
+  | { type: 'SET_TRUMP'; payload: Suit }
   | { type: 'PLACE_BID'; payload: Bid }
   | { type: 'PLAY_CARD'; payload: { playerId: string; card: Card } }
-  | { type: 'SET_TRUMP'; payload: Suit }
   | { type: 'COMPLETE_TRICK' }
-  | { type: 'SCORE_HAND' }
-  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
   | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -320,7 +319,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  // Track if we're mounted to handle hydration properly
   const [mounted, setMounted] = useState(false);
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
@@ -520,7 +518,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         completeTrick,
         exportGameState,
         importGameState,
-        updatePlayerName
+        updatePlayerName,
       }}>
         {children}
       </GameContext.Provider>
@@ -538,7 +536,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completeTrick,
       exportGameState,
       importGameState,
-      updatePlayerName
+      updatePlayerName,
     }}>
       {children}
     </GameContext.Provider>
