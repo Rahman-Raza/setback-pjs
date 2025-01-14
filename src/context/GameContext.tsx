@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useEffect, useState, useCallback } from 'react';
 import { GameState, Card, Suit, Player, Bid, Partnership } from '../types/game';
 import { createDeck, shuffleDeck, calculateHandPoints } from '../utils/cardUtils';
 
@@ -13,6 +13,16 @@ interface GameContextType {
   exportGameState: () => void;
   importGameState: (file: File) => void;
   updatePlayerName: (playerId: string, newName: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+interface HistoryState {
+  past: GameState[];
+  present: GameState;
+  future: GameState[];
 }
 
 const defaultPlayer: Player = {
@@ -47,10 +57,17 @@ const initialState: GameState = {
   winningScore: 21,
 };
 
+const initialHistoryState: HistoryState = {
+  past: [],
+  present: initialState,
+  future: []
+};
+
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 type GameAction =
-  | { type: 'INITIALIZE_GAME'; payload: { playerNames: string[] } }
+  | { type: 'INITIALIZE_GAME'; payload: { players: Player[]; partnerships: [Partnership, Partnership] } }
+  | { type: 'ADD_TRICK'; payload: Card[] }
   | { type: 'RESTORE_STATE'; payload: { partnerships: [Partnership, Partnership] } }
   | { type: 'DEAL_CARDS' }
   | { type: 'PLACE_BID'; payload: Bid }
@@ -59,33 +76,69 @@ type GameAction =
   | { type: 'COMPLETE_TRICK' }
   | { type: 'SCORE_HAND' }
   | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
-  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
+  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
 
-function gameReducer(state: GameState, action: GameAction): GameState {
+function gameReducer(state: HistoryState, action: GameAction): HistoryState {
   switch (action.type) {
-    case 'INITIALIZE_GAME': {
-      const players = action.payload.playerNames.map((name, index) => ({
-        id: `player-${index}`,
-        name,
-        hand: [] as Card[],
-        isDealer: index === 0,
-        position: index as 0 | 1 | 2 | 3,
-      }));
+    case 'UNDO': {
+      const { past, present, future } = state;
+      if (past.length === 0) return state;
 
-      const partnerships: [Partnership, Partnership] = [
-        { players: [players[0], players[2]] as [Player, Player], score: 0 },
-        { players: [players[1], players[3]] as [Player, Player], score: 0 },
-      ];
+      const previous = past[past.length - 1];
+      const newPast = past.slice(0, past.length - 1);
 
       return {
-        ...initialState,
-        players,
-        partnerships,
-        phase: 'dealing',
-        currentDealer: 0,
+        past: newPast,
+        present: previous,
+        future: [present, ...future]
       };
     }
 
+    case 'REDO': {
+      const { past, present, future } = state;
+      if (future.length === 0) return state;
+
+      const next = future[0];
+      const newFuture = future.slice(1);
+
+      return {
+        past: [...past, present],
+        present: next,
+        future: newFuture
+      };
+    }
+
+    default: {
+      // Handle all other actions by updating present and clearing future
+      const newPresent = gameStateReducer(state.present, action);
+      if (newPresent === state.present) return state;
+
+      return {
+        past: [...state.past, state.present],
+        present: newPresent,
+        future: []
+      };
+    }
+  }
+}
+
+// Separate reducer for handling game state updates
+function gameStateReducer(state: GameState, action: GameAction): GameState {
+  switch (action.type) {
+    case 'INITIALIZE_GAME':
+      return {
+        ...initialState,
+        players: action.payload.players,
+        partnerships: action.payload.partnerships,
+        phase: 'dealing'
+      };
+    case 'ADD_TRICK':
+      return {
+        ...state,
+        tricks: [...state.tricks, action.payload]
+      };
     case 'RESTORE_STATE': {
       return {
         ...state,
@@ -322,75 +375,53 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 export function GameProvider({ children }: { children: ReactNode }) {
   // Track if we're mounted to handle hydration properly
   const [mounted, setMounted] = useState(false);
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [state, dispatch] = useReducer(gameReducer, initialHistoryState);
 
   // Load saved state after mounting
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedState = sessionStorage.getItem('setbackGameState');
+    if (typeof window !== 'undefined' && mounted) {
+      const savedState = sessionStorage.getItem('gameState');
       if (savedState) {
         try {
-          const parsedState = JSON.parse(savedState);
-          if (parsedState.players.length > 0) {
+          const parsedState = JSON.parse(savedState) as GameState;
+          // Validate that parsedState has the expected structure
+          if (parsedState && 
+              typeof parsedState === 'object' && 
+              parsedState.players && 
+              Array.isArray(parsedState.players) && 
+              parsedState.players.length > 0) {
             // Initialize game with saved players
-            dispatch({ 
-              type: 'INITIALIZE_GAME', 
-              payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
-            });
-
-            // Restore partnerships
             dispatch({
-              type: 'RESTORE_STATE',
-              payload: { partnerships: parsedState.partnerships }
-            });
-
-            // Restore the deck and deal cards if needed
-            if (parsedState.phase !== 'dealing') {
-              dispatch({ type: 'DEAL_CARDS' });
-              
-              // Restore player hands
-              parsedState.players.forEach((player: Player, index: number) => {
-                dispatch({
-                  type: 'RESTORE_HAND',
-                  payload: { playerId: `player-${index}`, cards: player.hand }
-                });
-              });
-            }
-
-            // Restore other state properties
-            if (parsedState.trumpSuit) {
-              dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
-            }
-
-            // Restore bids
-            parsedState.bids.forEach((bid: Bid) => {
-              dispatch({ type: 'PLACE_BID', payload: bid });
-            });
-
-            // Restore tricks
-            parsedState.tricks.forEach((trick: Card[]) => {
-              trick.forEach((card: Card) => {
-                const playerId = parsedState.players[parsedState.currentPlayer].id;
-                dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
-              });
-              if (trick.length === 4) {
-                dispatch({ type: 'COMPLETE_TRICK' });
+              type: 'INITIALIZE_GAME',
+              payload: {
+                players: parsedState.players,
+                partnerships: parsedState.partnerships as [Partnership, Partnership]
               }
             });
 
-            // Restore current trick
-            parsedState.currentTrick.forEach((card: Card) => {
-              const playerId = parsedState.players[parsedState.currentPlayer].id;
-              dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
-            });
+            // Restore other game state if available
+            if (parsedState.trumpSuit) {
+              dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
+            }
+            if (parsedState.bids && parsedState.bids.length > 0) {
+              parsedState.bids.forEach((bid: Bid) => {
+                dispatch({ type: 'PLACE_BID', payload: bid });
+              });
+            }
+            if (parsedState.tricks && parsedState.tricks.length > 0) {
+              parsedState.tricks.forEach((trick: Card[]) => {
+                dispatch({ type: 'ADD_TRICK', payload: trick });
+              });
+            }
           }
         } catch (error) {
-          console.error('Error loading saved game state:', error);
+          console.error('Error parsing saved game state:', error);
+          sessionStorage.removeItem('gameState');
         }
       }
       setMounted(true);
     }
-  }, []);
+  }, [mounted]);
 
   // Save state to session storage whenever it changes, but only after mounted
   useEffect(() => {
@@ -400,11 +431,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state, mounted]);
 
   const initializeGame = (playerNames: string[]) => {
-    console.log('Initializing game with players:', playerNames);
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('setbackGameState');
-    }
-    dispatch({ type: 'INITIALIZE_GAME', payload: { playerNames } });
+    const players = playerNames.map((name, index) => ({
+      id: `player-${index}`,
+      name,
+      hand: [] as Card[],
+      isDealer: index === 0,
+      position: index as 0 | 1 | 2 | 3,
+    }));
+
+    const partnerships: [Partnership, Partnership] = [
+      { players: [players[0], players[2]] as [Player, Player], score: 0 },
+      { players: [players[1], players[3]] as [Player, Player], score: 0 },
+    ];
+
+    dispatch({
+      type: 'INITIALIZE_GAME',
+      payload: {
+        players,
+        partnerships
+      }
+    });
   };
 
   const dealCards = () => {
@@ -507,6 +553,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PLAYER_NAME', payload: { playerId, newName } });
   };
 
+  const canUndo = state.past.length > 0;
+  const canRedo = state.future.length > 0;
+
+  const undo = useCallback(() => {
+    if (canUndo) {
+      dispatch({ type: 'UNDO' });
+    }
+  }, [canUndo]);
+
+  const redo = useCallback(() => {
+    if (canRedo) {
+      dispatch({ type: 'REDO' });
+    }
+  }, [canRedo]);
+
   // Always render with initial state on first mount to avoid hydration mismatch
   if (!mounted) {
     return (
@@ -520,7 +581,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         completeTrick,
         exportGameState,
         importGameState,
-        updatePlayerName
+        updatePlayerName,
+        undo,
+        redo,
+        canUndo: false,
+        canRedo: false
       }}>
         {children}
       </GameContext.Provider>
@@ -529,7 +594,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   return (
     <GameContext.Provider value={{ 
-      state, 
+      state: state.present, 
       initializeGame, 
       dealCards, 
       placeBid, 
@@ -538,7 +603,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completeTrick,
       exportGameState,
       importGameState,
-      updatePlayerName
+      updatePlayerName,
+      undo,
+      redo,
+      canUndo,
+      canRedo
     }}>
       {children}
     </GameContext.Provider>

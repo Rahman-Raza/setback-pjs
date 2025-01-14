@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Card as CardType, Partnership, Player } from '../types/game';
@@ -265,7 +265,11 @@ const GameBoard: React.FC = () => {
     completeTrick,
     exportGameState,
     importGameState,
-    updatePlayerName
+    updatePlayerName,
+    undo,
+    redo,
+    canUndo,
+    canRedo
   } = useGame();
   const { startTutorial } = useTutorial();
   const { currentPlayer, phase, players, currentTrick, trumpSuit, partnerships, currentBid, bids } = state;
@@ -512,6 +516,23 @@ const GameBoard: React.FC = () => {
                   </button>
 
                   <button
+                    onClick={() => {
+                      setShowSidebar(false);
+                      setShowHistory(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-6 py-5 rounded-2xl
+                             hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 
+                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
+                             flex items-center justify-between group"
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Game History</span>
+                      <span className="text-sm text-indigo-100 font-medium">Review previous tricks</span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">📜</span>
+                  </button>
+
+                  <button
                     onClick={handleResetGame}
                     className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-5 rounded-2xl
                              hover:from-red-600 hover:to-red-700 transition-all duration-200 
@@ -582,6 +603,55 @@ const GameBoard: React.FC = () => {
                       <span className="text-sm text-indigo-100 font-medium">Review previous tricks</span>
                     </div>
                     <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">📜</span>
+                  </button>
+                </div>
+
+                {/* Undo/Redo Buttons */}
+                <div className="px-8 pb-4 space-y-3">
+                  <button
+                    onClick={() => {
+                      if (canUndo) {
+                        setShowSidebar(false);
+                        undo();
+                      }
+                    }}
+                    className={`w-full px-6 py-4 rounded-xl transition-all duration-200 
+                             shadow-md hover:shadow-lg
+                             flex items-center justify-between group
+                             ${canUndo 
+                               ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white' 
+                               : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Undo</span>
+                      <span className={`text-sm font-medium ${canUndo ? 'text-amber-100' : 'text-gray-500'}`}>
+                        Ctrl+Z (⌘Z on Mac)
+                      </span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">↩️</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (canRedo) {
+                        setShowSidebar(false);
+                        redo();
+                      }
+                    }}
+                    className={`w-full px-6 py-4 rounded-xl transition-all duration-200 
+                             shadow-md hover:shadow-lg
+                             flex items-center justify-between group
+                             ${canRedo 
+                               ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white' 
+                               : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Redo</span>
+                      <span className={`text-sm font-medium ${canRedo ? 'text-amber-100' : 'text-gray-500'}`}>
+                        Ctrl+Y or Ctrl+Shift+Z
+                      </span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">↪️</span>
                   </button>
                 </div>
 
@@ -862,6 +932,13 @@ const GameBoard: React.FC = () => {
         />
 
         <TutorialOverlay />
+
+        {/* Add GameHistoryViewer component */}
+        <GameHistoryViewer
+          tricks={getTrickHistory()}
+          isOpen={showHistory}
+          onClose={() => setShowHistory(false)}
+        />
       </div>
     </div>
   );
