@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { useTutorial } from '../context/TutorialContext';
 import { Card as CardType, Partnership, Player } from '../types/game';
@@ -264,7 +264,11 @@ const GameBoard: React.FC = () => {
     completeTrick,
     exportGameState,
     importGameState,
-    updatePlayerName
+    updatePlayerName,
+    undo,
+    redo,
+    canUndo,
+    canRedo
   } = useGame();
   const { startTutorial } = useTutorial();
   const { currentPlayer, phase, players, currentTrick, trumpSuit, partnerships, currentBid, bids } = state;
@@ -274,6 +278,28 @@ const GameBoard: React.FC = () => {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [showTrickAnimation, setShowTrickAnimation] = useState(false);
   const [trickWinner, setTrickWinner] = useState<string>('');
+
+  // Add keyboard shortcut handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {  // metaKey for Mac
+        if (e.key === 'z') {
+          e.preventDefault();
+          if (e.shiftKey && canRedo) {
+            redo();
+          } else if (canUndo) {
+            undo();
+          }
+        } else if (e.key === 'y' && canRedo) {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, canUndo, canRedo]);
 
   const handleStartGame = (playerNames: string[]) => {
     console.log('Starting game with players:', playerNames);
@@ -512,6 +538,55 @@ const GameBoard: React.FC = () => {
                       <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">⬆️</span>
                     </div>
                   </label>
+                </div>
+
+                {/* Undo/Redo Buttons */}
+                <div className="px-8 pb-4 space-y-3">
+                  <button
+                    onClick={() => {
+                      if (canUndo) {
+                        setShowSidebar(false);
+                        undo();
+                      }
+                    }}
+                    className={`w-full px-6 py-4 rounded-xl transition-all duration-200 
+                             shadow-md hover:shadow-lg
+                             flex items-center justify-between group
+                             ${canUndo 
+                               ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white' 
+                               : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Undo</span>
+                      <span className={`text-sm font-medium ${canUndo ? 'text-amber-100' : 'text-gray-500'}`}>
+                        Ctrl+Z (⌘Z on Mac)
+                      </span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">↩️</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (canRedo) {
+                        setShowSidebar(false);
+                        redo();
+                      }
+                    }}
+                    className={`w-full px-6 py-4 rounded-xl transition-all duration-200 
+                             shadow-md hover:shadow-lg
+                             flex items-center justify-between group
+                             ${canRedo 
+                               ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white' 
+                               : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Redo</span>
+                      <span className={`text-sm font-medium ${canRedo ? 'text-amber-100' : 'text-gray-500'}`}>
+                        Ctrl+Y or Ctrl+Shift+Z
+                      </span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">↪️</span>
+                  </button>
                 </div>
 
                 {/* Footer */}

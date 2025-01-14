@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useEffect, useState } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useEffect, useState, useCallback } from 'react';
 import { GameState, Card, Suit, Player, Bid, Partnership } from '../types/game';
 import { createDeck, shuffleDeck, calculateHandPoints } from '../utils/cardUtils';
 
@@ -13,6 +13,16 @@ interface GameContextType {
   exportGameState: () => void;
   importGameState: (file: File) => void;
   updatePlayerName: (playerId: string, newName: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+interface HistoryState {
+  past: GameState[];
+  present: GameState;
+  future: GameState[];
 }
 
 const defaultPlayer: Player = {
@@ -47,6 +57,12 @@ const initialState: GameState = {
   winningScore: 21,
 };
 
+const initialHistoryState: HistoryState = {
+  past: [],
+  present: initialState,
+  future: []
+};
+
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
 type GameAction =
@@ -59,9 +75,56 @@ type GameAction =
   | { type: 'COMPLETE_TRICK' }
   | { type: 'SCORE_HAND' }
   | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
-  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
+  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
 
-function gameReducer(state: GameState, action: GameAction): GameState {
+function gameReducer(state: HistoryState, action: GameAction): HistoryState {
+  switch (action.type) {
+    case 'UNDO': {
+      const { past, present, future } = state;
+      if (past.length === 0) return state;
+
+      const previous = past[past.length - 1];
+      const newPast = past.slice(0, past.length - 1);
+
+      return {
+        past: newPast,
+        present: previous,
+        future: [present, ...future]
+      };
+    }
+
+    case 'REDO': {
+      const { past, present, future } = state;
+      if (future.length === 0) return state;
+
+      const next = future[0];
+      const newFuture = future.slice(1);
+
+      return {
+        past: [...past, present],
+        present: next,
+        future: newFuture
+      };
+    }
+
+    default: {
+      // Handle all other actions by updating present and clearing future
+      const newPresent = gameStateReducer(state.present, action);
+      if (newPresent === state.present) return state;
+
+      return {
+        past: [...state.past, state.present],
+        present: newPresent,
+        future: []
+      };
+    }
+  }
+}
+
+// Separate reducer for handling game state updates
+function gameStateReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'INITIALIZE_GAME': {
       const players = action.payload.playerNames.map((name, index) => ({
@@ -322,7 +385,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 export function GameProvider({ children }: { children: ReactNode }) {
   // Track if we're mounted to handle hydration properly
   const [mounted, setMounted] = useState(false);
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [state, dispatch] = useReducer(gameReducer, initialHistoryState);
 
   // Load saved state after mounting
   useEffect(() => {
@@ -507,6 +570,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_PLAYER_NAME', payload: { playerId, newName } });
   };
 
+  const canUndo = state.past.length > 0;
+  const canRedo = state.future.length > 0;
+
+  const undo = useCallback(() => {
+    if (canUndo) {
+      dispatch({ type: 'UNDO' });
+    }
+  }, [canUndo]);
+
+  const redo = useCallback(() => {
+    if (canRedo) {
+      dispatch({ type: 'REDO' });
+    }
+  }, [canRedo]);
+
   // Always render with initial state on first mount to avoid hydration mismatch
   if (!mounted) {
     return (
@@ -520,7 +598,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         completeTrick,
         exportGameState,
         importGameState,
-        updatePlayerName
+        updatePlayerName,
+        undo,
+        redo,
+        canUndo: false,
+        canRedo: false
       }}>
         {children}
       </GameContext.Provider>
@@ -529,7 +611,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   return (
     <GameContext.Provider value={{ 
-      state, 
+      state: state.present, 
       initializeGame, 
       dealCards, 
       placeBid, 
@@ -538,7 +620,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       completeTrick,
       exportGameState,
       importGameState,
-      updatePlayerName
+      updatePlayerName,
+      undo,
+      redo,
+      canUndo,
+      canRedo
     }}>
       {children}
     </GameContext.Provider>
