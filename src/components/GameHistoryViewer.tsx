@@ -27,7 +27,7 @@ interface GameHistoryViewerProps {
 
 const Card: React.FC<{ card: CardType }> = ({ card }) => {
   const getSuitColor = (suit: string) => {
-    return suit === '♥' || suit === '♦' ? 'text-red-500' : 'text-gray-800';
+    return suit === 'hearts' || suit === 'diamonds' ? 'text-red-600' : 'text-gray-800';
   };
 
   const getRankDisplay = (rank: string) => {
@@ -44,10 +44,10 @@ const Card: React.FC<{ card: CardType }> = ({ card }) => {
     <div className="bg-white rounded-lg shadow-md p-2 w-16 h-24 border border-gray-200
                     transform transition-transform hover:scale-105 hover:shadow-lg">
       <div className="flex flex-col items-center justify-between h-full">
-        <div className={`text-lg font-bold ${getSuitColor(getSuitSymbol(card.suit))}`}>
+        <div className={`text-lg font-bold ${getSuitColor(card.suit)}`}>
           {getRankDisplay(card.rank)}
         </div>
-        <div className={`text-2xl ${getSuitColor(getSuitSymbol(card.suit))}`}>
+        <div className={`text-2xl ${getSuitColor(card.suit)}`}>
           {getSuitSymbol(card.suit)}
         </div>
       </div>
@@ -117,7 +117,7 @@ const GameHistoryViewer: React.FC<GameHistoryViewerProps> = ({
                         </p>
                         <p className="text-gray-600 flex items-center gap-2">
                           <span className="font-medium">Trump:</span>
-                          <span className={`text-lg ${trick.trumpSuit === '♥' || trick.trumpSuit === '♦' ? 'text-red-500' : 'text-gray-900'}`}>
+                          <span className={`text-lg ${trick.trumpSuit === 'hearts' || trick.trumpSuit === 'diamonds' ? 'text-red-600' : 'text-gray-900'}`}>
                             {getSuitSymbol(trick.trumpSuit)}
                           </span>
                         </p>

@@ -281,28 +281,6 @@ const GameBoard: React.FC = () => {
   const [trickWinner, setTrickWinner] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
 
-  // Add keyboard shortcut handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {  // metaKey for Mac
-        if (e.key === 'z') {
-          e.preventDefault();
-          if (e.shiftKey && canRedo) {
-            redo();
-          } else if (canUndo) {
-            undo();
-          }
-        } else if (e.key === 'y' && canRedo) {
-          e.preventDefault();
-          redo();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo, canUndo, canRedo]);
-
   const handleStartGame = (playerNames: string[]) => {
     console.log('Starting game with players:', playerNames);
     // Initialize game with custom player names
@@ -349,6 +327,15 @@ const GameBoard: React.FC = () => {
     const leadSuit = trick[0].suit;
 
     trick.forEach((card, index) => {
+      // Handle joker
+      if (card.isJoker) {
+        winningCard = card;
+        winningIndex = index;
+        return;
+      }
+      if (winningCard.isJoker) return;
+
+      // Handle trump
       if (card.suit === trumpSuit && winningCard.suit !== trumpSuit) {
         winningCard = card;
         winningIndex = index;
@@ -366,9 +353,9 @@ const GameBoard: React.FC = () => {
     });
 
     // Calculate which player won based on the first player and winning index
-    const firstPlayer = (currentPlayer - trick.length + 4) % 4;
-    const winningPlayer = (firstPlayer + winningIndex) % 4;
-    return players[winningPlayer]?.name || '';
+    const firstPlayerIndex = (currentPlayer - trick.length + 4) % 4;
+    const winningPlayerIndex = (firstPlayerIndex + winningIndex) % 4;
+    return players[winningPlayerIndex]?.name || '';
   };
 
   const handleCompleteTrick = () => {
@@ -600,6 +587,23 @@ const GameBoard: React.FC = () => {
                       <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">⬆️</span>
                     </div>
                   </label>
+
+                  <button
+                    onClick={() => {
+                      setShowSidebar(false);
+                      setShowHistory(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-6 py-5 rounded-2xl
+                             hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 
+                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
+                             flex items-center justify-between group"
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="text-lg font-bold">Game History</span>
+                      <span className="text-sm text-indigo-100 font-medium">Review previous tricks</span>
+                    </div>
+                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">📜</span>
+                  </button>
                 </div>
 
                 {/* Undo/Redo Buttons */}
@@ -920,6 +924,12 @@ const GameBoard: React.FC = () => {
             onComplete={handleAnimationComplete}
           />
         )}
+
+        <GameHistoryViewer
+          tricks={getTrickHistory()}
+          isOpen={showHistory}
+          onClose={() => setShowHistory(false)}
+        />
 
         <TutorialOverlay />
 
