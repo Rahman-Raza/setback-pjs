@@ -13,6 +13,10 @@ interface GameContextType {
   exportGameState: () => void;
   importGameState: (file: File) => void;
   updatePlayerName: (playerId: string, newName: string) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const defaultPlayer: Player = {
@@ -49,16 +53,72 @@ const initialState: GameState = {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
+interface HistoryState {
+  past: GameState[];
+  present: GameState;
+  future: GameState[];
+}
+
+const initialHistoryState: HistoryState = {
+  past: [],
+  present: initialState,
+  future: [],
+};
+
+type HistoryAction =
+  | { type: 'NORMAL'; action: GameAction }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
+
+function historyReducer(state: HistoryState, historyAction: HistoryAction): HistoryState {
+  const { past, present, future } = state;
+
+  switch (historyAction.type) {
+    case 'NORMAL': {
+      const newPresent = gameReducer(present, historyAction.action);
+      if (newPresent === present) {
+        return state;
+      }
+      return {
+        past: [...past, present],
+        present: newPresent,
+        future: [],
+      };
+    }
+    case 'UNDO': {
+      if (past.length === 0) return state;
+      const previous = past[past.length - 1];
+      const newPast = past.slice(0, past.length - 1);
+      return {
+        past: newPast,
+        present: previous,
+        future: [present, ...future],
+      };
+    }
+    case 'REDO': {
+      if (future.length === 0) return state;
+      const next = future[0];
+      const newFuture = future.slice(1);
+      return {
+        past: [...past, present],
+        present: next,
+        future: newFuture,
+      };
+    }
+    default:
+      return state;
+  }
+}
+
 type GameAction =
   | { type: 'INITIALIZE_GAME'; payload: { playerNames: string[] } }
   | { type: 'RESTORE_STATE'; payload: { partnerships: [Partnership, Partnership] } }
   | { type: 'DEAL_CARDS' }
+  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
+  | { type: 'SET_TRUMP'; payload: Suit }
   | { type: 'PLACE_BID'; payload: Bid }
   | { type: 'PLAY_CARD'; payload: { playerId: string; card: Card } }
-  | { type: 'SET_TRUMP'; payload: Suit }
   | { type: 'COMPLETE_TRICK' }
-  | { type: 'SCORE_HAND' }
-  | { type: 'RESTORE_HAND'; payload: { playerId: string; cards: Card[] } }
   | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
 
 function gameReducer(state: GameState, action: GameAction): GameState {
@@ -320,9 +380,40 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 }
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  // Track if we're mounted to handle hydration properly
   const [mounted, setMounted] = useState(false);
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [{ past, present: state, future }, dispatch] = useReducer(historyReducer, initialHistoryState);
+
+  // Add keyboard event listener
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if Cmd/Ctrl is pressed
+      if (event.metaKey || event.ctrlKey) {
+        if (event.key === 'z') {
+          event.preventDefault();
+          if (event.shiftKey) {
+            // Cmd/Ctrl + Shift + Z = Redo
+            if (future.length > 0) {
+              dispatch({ type: 'REDO' });
+            }
+          } else {
+            // Cmd/Ctrl + Z = Undo
+            if (past.length > 0) {
+              dispatch({ type: 'UNDO' });
+            }
+          }
+        } else if (event.key === 'y') {
+          // Cmd/Ctrl + Y = Redo (alternative)
+          event.preventDefault();
+          if (future.length > 0) {
+            dispatch({ type: 'REDO' });
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [past.length, future.length]);
 
   // Load saved state after mounting
   useEffect(() => {
@@ -334,54 +425,75 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (parsedState.players.length > 0) {
             // Initialize game with saved players
             dispatch({ 
-              type: 'INITIALIZE_GAME', 
-              payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
+              type: 'NORMAL',
+              action: { 
+                type: 'INITIALIZE_GAME', 
+                payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
+              }
             });
 
             // Restore partnerships
             dispatch({
-              type: 'RESTORE_STATE',
-              payload: { partnerships: parsedState.partnerships }
+              type: 'NORMAL',
+              action: {
+                type: 'RESTORE_STATE',
+                payload: { partnerships: parsedState.partnerships }
+              }
             });
 
             // Restore the deck and deal cards if needed
             if (parsedState.phase !== 'dealing') {
-              dispatch({ type: 'DEAL_CARDS' });
+              dispatch({ type: 'NORMAL', action: { type: 'DEAL_CARDS' } });
               
               // Restore player hands
               parsedState.players.forEach((player: Player, index: number) => {
                 dispatch({
-                  type: 'RESTORE_HAND',
-                  payload: { playerId: `player-${index}`, cards: player.hand }
+                  type: 'NORMAL',
+                  action: {
+                    type: 'RESTORE_HAND',
+                    payload: { playerId: `player-${index}`, cards: player.hand }
+                  }
                 });
               });
             }
 
             // Restore other state properties
             if (parsedState.trumpSuit) {
-              dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
+              dispatch({
+                type: 'NORMAL',
+                action: { type: 'SET_TRUMP', payload: parsedState.trumpSuit }
+              });
             }
 
             // Restore bids
             parsedState.bids.forEach((bid: Bid) => {
-              dispatch({ type: 'PLACE_BID', payload: bid });
+              dispatch({
+                type: 'NORMAL',
+                action: { type: 'PLACE_BID', payload: bid }
+              });
             });
 
             // Restore tricks
             parsedState.tricks.forEach((trick: Card[]) => {
               trick.forEach((card: Card) => {
                 const playerId = parsedState.players[parsedState.currentPlayer].id;
-                dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
+                dispatch({
+                  type: 'NORMAL',
+                  action: { type: 'PLAY_CARD', payload: { playerId, card } }
+                });
               });
               if (trick.length === 4) {
-                dispatch({ type: 'COMPLETE_TRICK' });
+                dispatch({ type: 'NORMAL', action: { type: 'COMPLETE_TRICK' } });
               }
             });
 
             // Restore current trick
             parsedState.currentTrick.forEach((card: Card) => {
               const playerId = parsedState.players[parsedState.currentPlayer].id;
-              dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
+              dispatch({
+                type: 'NORMAL',
+                action: { type: 'PLAY_CARD', payload: { playerId, card } }
+              });
             });
           }
         } catch (error) {
@@ -399,33 +511,57 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [state, mounted]);
 
+  const undo = () => {
+    if (past.length > 0) {
+      dispatch({ type: 'UNDO' });
+    }
+  };
+
+  const redo = () => {
+    if (future.length > 0) {
+      dispatch({ type: 'REDO' });
+    }
+  };
+
   const initializeGame = (playerNames: string[]) => {
     console.log('Initializing game with players:', playerNames);
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('setbackGameState');
     }
-    dispatch({ type: 'INITIALIZE_GAME', payload: { playerNames } });
+    dispatch({ 
+      type: 'NORMAL',
+      action: { type: 'INITIALIZE_GAME', payload: { playerNames } }
+    });
   };
 
   const dealCards = () => {
     console.log('Dealing cards...');
-    dispatch({ type: 'DEAL_CARDS' });
+    dispatch({ type: 'NORMAL', action: { type: 'DEAL_CARDS' } });
   };
 
   const placeBid = (playerId: string, points: number, pass: boolean) => {
-    dispatch({ type: 'PLACE_BID', payload: { playerId, points, pass } });
+    dispatch({ 
+      type: 'NORMAL',
+      action: { type: 'PLACE_BID', payload: { playerId, points, pass } }
+    });
   };
 
   const playCard = (playerId: string, card: Card) => {
-    dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
+    dispatch({ 
+      type: 'NORMAL',
+      action: { type: 'PLAY_CARD', payload: { playerId, card } }
+    });
   };
 
   const setTrump = (suit: Suit) => {
-    dispatch({ type: 'SET_TRUMP', payload: suit });
+    dispatch({ 
+      type: 'NORMAL',
+      action: { type: 'SET_TRUMP', payload: suit }
+    });
   };
 
   const completeTrick = () => {
-    dispatch({ type: 'COMPLETE_TRICK' });
+    dispatch({ type: 'NORMAL', action: { type: 'COMPLETE_TRICK' } });
   };
 
   const exportGameState = () => {
@@ -448,54 +584,75 @@ export function GameProvider({ children }: { children: ReactNode }) {
       
       // Initialize game with saved players
       dispatch({ 
-        type: 'INITIALIZE_GAME', 
-        payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
+        type: 'NORMAL',
+        action: { 
+          type: 'INITIALIZE_GAME', 
+          payload: { playerNames: parsedState.players.map((p: Player) => p.name) }
+        }
       });
 
       // Restore partnerships
       dispatch({
-        type: 'RESTORE_STATE',
-        payload: { partnerships: parsedState.partnerships }
+        type: 'NORMAL',
+        action: {
+          type: 'RESTORE_STATE',
+          payload: { partnerships: parsedState.partnerships }
+        }
       });
 
       // Restore the deck and deal cards if needed
       if (parsedState.phase !== 'dealing') {
-        dispatch({ type: 'DEAL_CARDS' });
+        dispatch({ type: 'NORMAL', action: { type: 'DEAL_CARDS' } });
         
         // Restore player hands
         parsedState.players.forEach((player: Player, index: number) => {
           dispatch({
-            type: 'RESTORE_HAND',
-            payload: { playerId: `player-${index}`, cards: player.hand }
+            type: 'NORMAL',
+            action: {
+              type: 'RESTORE_HAND',
+              payload: { playerId: `player-${index}`, cards: player.hand }
+            }
           });
         });
       }
 
       // Restore other state properties
       if (parsedState.trumpSuit) {
-        dispatch({ type: 'SET_TRUMP', payload: parsedState.trumpSuit });
+        dispatch({
+          type: 'NORMAL',
+          action: { type: 'SET_TRUMP', payload: parsedState.trumpSuit }
+        });
       }
 
       // Restore bids
       parsedState.bids.forEach((bid: Bid) => {
-        dispatch({ type: 'PLACE_BID', payload: bid });
+        dispatch({
+          type: 'NORMAL',
+          action: { type: 'PLACE_BID', payload: bid }
+        });
       });
 
       // Restore tricks
       parsedState.tricks.forEach((trick: Card[]) => {
         trick.forEach((card: Card) => {
           const playerId = parsedState.players[parsedState.currentPlayer].id;
-          dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
+          dispatch({
+            type: 'NORMAL',
+            action: { type: 'PLAY_CARD', payload: { playerId, card } }
+          });
         });
         if (trick.length === 4) {
-          dispatch({ type: 'COMPLETE_TRICK' });
+          dispatch({ type: 'NORMAL', action: { type: 'COMPLETE_TRICK' } });
         }
       });
 
       // Restore current trick
       parsedState.currentTrick.forEach((card: Card) => {
         const playerId = parsedState.players[parsedState.currentPlayer].id;
-        dispatch({ type: 'PLAY_CARD', payload: { playerId, card } });
+        dispatch({
+          type: 'NORMAL',
+          action: { type: 'PLAY_CARD', payload: { playerId, card } }
+        });
       });
     } catch (error) {
       console.error('Error importing game state:', error);
@@ -504,23 +661,37 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePlayerName = (playerId: string, newName: string) => {
-    dispatch({ type: 'UPDATE_PLAYER_NAME', payload: { playerId, newName } });
+    dispatch({ 
+      type: 'NORMAL',
+      action: { type: 'UPDATE_PLAYER_NAME', payload: { playerId, newName } }
+    });
   };
 
-  // Always render with initial state on first mount to avoid hydration mismatch
+  // Update the provider value to include undo/redo
+  const providerValue = {
+    state,
+    initializeGame,
+    dealCards,
+    placeBid,
+    playCard,
+    setTrump,
+    completeTrick,
+    exportGameState,
+    importGameState,
+    updatePlayerName,
+    undo,
+    redo,
+    canUndo: past.length > 0,
+    canRedo: future.length > 0,
+  };
+
   if (!mounted) {
     return (
       <GameContext.Provider value={{ 
-        state: initialState, 
-        initializeGame, 
-        dealCards, 
-        placeBid, 
-        playCard, 
-        setTrump,
-        completeTrick,
-        exportGameState,
-        importGameState,
-        updatePlayerName
+        ...providerValue,
+        state: initialState,
+        canUndo: false,
+        canRedo: false
       }}>
         {children}
       </GameContext.Provider>
@@ -528,18 +699,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <GameContext.Provider value={{ 
-      state, 
-      initializeGame, 
-      dealCards, 
-      placeBid, 
-      playCard, 
-      setTrump,
-      completeTrick,
-      exportGameState,
-      importGameState,
-      updatePlayerName
-    }}>
+    <GameContext.Provider value={providerValue}>
       {children}
     </GameContext.Provider>
   );

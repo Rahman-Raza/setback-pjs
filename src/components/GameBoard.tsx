@@ -265,7 +265,11 @@ const GameBoard: React.FC = () => {
     completeTrick,
     exportGameState,
     importGameState,
-    updatePlayerName
+    updatePlayerName,
+    undo,
+    redo,
+    canUndo,
+    canRedo
   } = useGame();
   const { startTutorial } = useTutorial();
   const { currentPlayer, phase, players, currentTrick, trumpSuit, partnerships, currentBid, bids } = state;
@@ -454,12 +458,13 @@ const GameBoard: React.FC = () => {
         {players.length > 0 && (
           <button
             onClick={() => setShowSidebar(true)}
-            className="fixed bottom-8 left-8 w-14 h-14 bg-gradient-to-r from-white to-gray-100
-                     text-gray-800 rounded-full shadow-lg flex items-center justify-center 
-                     transition-all z-50 text-2xl font-bold hover:shadow-xl hover:scale-105
-                     border border-gray-200"
+            className="fixed bottom-8 left-8 w-14 h-14 bg-white/90 backdrop-blur-sm
+                     text-gray-800 rounded-full shadow-xl flex items-center justify-center 
+                     transition-all duration-300 z-50 text-2xl hover:scale-110
+                     hover:bg-white hover:shadow-2xl border border-white/20
+                     hover:rotate-12"
           >
-            ?
+            <span className="transform transition-transform">⚙️</span>
           </button>
         )}
 
@@ -468,61 +473,69 @@ const GameBoard: React.FC = () => {
           <>
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 bg-black/70 z-40 backdrop-blur-md transition-opacity duration-300"
+              className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity duration-300"
               onClick={() => setShowSidebar(false)}
             />
             
             {/* Sidebar */}
-            <div className="fixed left-0 top-0 h-full w-80 bg-gradient-to-b from-gray-50 to-white shadow-2xl z-50 
-                          transform transition-transform duration-300 ease-in-out">
+            <div className="fixed left-0 top-0 h-full w-96 bg-white shadow-2xl z-50 
+                          transform transition-transform duration-300 ease-out">
               <div className="flex flex-col h-full">
                 {/* Header */}
-                <div className="p-8 border-b border-gray-200">
+                <div className="px-8 py-6 border-b border-gray-100">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 
-                                 bg-clip-text text-transparent">Game Menu</h2>
+                    <h2 className="text-2xl font-bold text-gray-800">Game Menu</h2>
                     <button 
                       onClick={() => setShowSidebar(false)}
-                      className="text-gray-400 hover:text-gray-600 w-10 h-10 rounded-full 
-                               flex items-center justify-center hover:bg-gray-100 
-                               transition-all duration-200 text-xl"
+                      className="text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full 
+                               flex items-center justify-center hover:bg-gray-100/80 
+                               transition-all duration-200"
+                      aria-label="Close menu"
                     >
-                      ✕
+                      ×
                     </button>
                   </div>
                 </div>
 
                 {/* Menu Items */}
-                <div className="flex-1 p-8 space-y-5">
+                <div className="flex-1 px-6 py-8 space-y-4 overflow-y-auto">
                   <button
                     onClick={() => {
                       setShowSidebar(false);
                       startTutorial(state);
                     }}
-                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-5 rounded-2xl
-                             hover:from-blue-600 hover:to-blue-700 transition-all duration-200 
-                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
-                             flex items-center justify-between group"
+                    className="w-full bg-white border border-blue-100 hover:border-blue-200 px-6 py-4 rounded-xl
+                             hover:bg-blue-50/50 transition-all duration-200 
+                             shadow-sm hover:shadow-md group"
                   >
-                    <div className="flex flex-col items-start">
-                      <span className="text-lg font-bold">Tutorial Help</span>
-                      <span className="text-sm text-blue-100 font-medium">Learn how to play</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl text-blue-500 group-hover:scale-110 transition-transform">❔</span>
+                        <div className="flex flex-col items-start">
+                          <span className="text-lg font-semibold text-gray-800">Tutorial Help</span>
+                          <span className="text-sm text-gray-500">Learn how to play</span>
+                        </div>
+                      </div>
+                      <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
                     </div>
-                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">❔</span>
                   </button>
 
                   <button
                     onClick={handleResetGame}
-                    className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-5 rounded-2xl
-                             hover:from-red-600 hover:to-red-700 transition-all duration-200 
-                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
-                             flex items-center justify-between group"
+                    className="w-full bg-white border border-red-100 hover:border-red-200 px-6 py-4 rounded-xl
+                             hover:bg-red-50/50 transition-all duration-200 
+                             shadow-sm hover:shadow-md group"
                   >
-                    <div className="flex flex-col items-start">
-                      <span className="text-lg font-bold">Reset Game</span>
-                      <span className="text-sm text-red-100 font-medium">Start a new game</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl text-red-500 group-hover:scale-110 transition-transform">↺</span>
+                        <div className="flex flex-col items-start">
+                          <span className="text-lg font-semibold text-gray-800">Reset Game</span>
+                          <span className="text-sm text-gray-500">Start a new game</span>
+                        </div>
+                      </div>
+                      <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
                     </div>
-                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">↺</span>
                   </button>
 
                   <button
@@ -530,16 +543,20 @@ const GameBoard: React.FC = () => {
                       setShowSidebar(false);
                       exportGameState();
                     }}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-6 py-5 rounded-2xl
-                             hover:from-emerald-600 hover:to-emerald-700 transition-all duration-200 
-                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
-                             flex items-center justify-between group"
+                    className="w-full bg-white border border-emerald-100 hover:border-emerald-200 px-6 py-4 rounded-xl
+                             hover:bg-emerald-50/50 transition-all duration-200 
+                             shadow-sm hover:shadow-md group"
                   >
-                    <div className="flex flex-col items-start">
-                      <span className="text-lg font-bold">Export Game</span>
-                      <span className="text-sm text-emerald-100 font-medium">Save current game</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl text-emerald-500 group-hover:scale-110 transition-transform">⬇️</span>
+                        <div className="flex flex-col items-start">
+                          <span className="text-lg font-semibold text-gray-800">Export Game</span>
+                          <span className="text-sm text-gray-500">Save current game</span>
+                        </div>
+                      </div>
+                      <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
                     </div>
-                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">⬇️</span>
                   </button>
 
                   <label className="block">
@@ -555,15 +572,19 @@ const GameBoard: React.FC = () => {
                         }
                       }}
                     />
-                    <div className="w-full bg-gradient-to-r from-violet-500 to-violet-600 text-white px-6 py-5 rounded-2xl
-                                hover:from-violet-600 hover:to-violet-700 transition-all duration-200 
-                                shadow-lg hover:shadow-xl hover:-translate-y-0.5
-                                flex items-center justify-between group cursor-pointer">
-                      <div className="flex flex-col items-start">
-                        <span className="text-lg font-bold">Import Game</span>
-                        <span className="text-sm text-violet-100 font-medium">Load saved game</span>
+                    <div className="w-full bg-white border border-violet-100 hover:border-violet-200 px-6 py-4 rounded-xl
+                                hover:bg-violet-50/50 transition-all duration-200 
+                                shadow-sm hover:shadow-md group cursor-pointer">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <span className="text-2xl text-violet-500 group-hover:scale-110 transition-transform">⬆️</span>
+                          <div className="flex flex-col items-start">
+                            <span className="text-lg font-semibold text-gray-800">Import Game</span>
+                            <span className="text-sm text-gray-500">Load saved game</span>
+                          </div>
+                        </div>
+                        <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
                       </div>
-                      <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">⬆️</span>
                     </div>
                   </label>
 
@@ -572,28 +593,114 @@ const GameBoard: React.FC = () => {
                       setShowSidebar(false);
                       setShowHistory(true);
                     }}
-                    className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-6 py-5 rounded-2xl
-                             hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 
-                             shadow-lg hover:shadow-xl hover:-translate-y-0.5
-                             flex items-center justify-between group"
+                    className="w-full bg-white border border-indigo-100 hover:border-indigo-200 px-6 py-4 rounded-xl
+                             hover:bg-indigo-50/50 transition-all duration-200 
+                             shadow-sm hover:shadow-md group"
                   >
-                    <div className="flex flex-col items-start">
-                      <span className="text-lg font-bold">Game History</span>
-                      <span className="text-sm text-indigo-100 font-medium">Review previous tricks</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl text-indigo-500 group-hover:scale-110 transition-transform">📜</span>
+                        <div className="flex flex-col items-start">
+                          <span className="text-lg font-semibold text-gray-800">Game History</span>
+                          <span className="text-sm text-gray-500">Review previous tricks</span>
+                        </div>
+                      </div>
+                      <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
                     </div>
-                    <span className="text-2xl opacity-90 group-hover:opacity-100 transition-all">📜</span>
                   </button>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-200">
-                  <p className="text-sm text-gray-400 text-center font-medium">
+                <div className="px-8 py-6 border-t border-gray-100">
+                  <p className="text-sm text-gray-400 text-center">
                     Press ESC or click outside to close
                   </p>
                 </div>
               </div>
             </div>
           </>
+        )}
+
+        {/* Add undo/redo controls above Trump Suit */}
+        {trumpSuit && (
+          <div className="fixed bottom-8 right-8 flex flex-col gap-4 z-40">
+            {/* Undo/Redo Controls */}
+            <div className="flex gap-2">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className={`bg-white/10 backdrop-blur-sm border px-4 py-2 rounded-xl
+                           transition-all duration-200 shadow-xl
+                           flex items-center justify-center gap-2 group
+                           ${canUndo 
+                             ? 'border-white/30 hover:bg-white/20 hover:border-white/40' 
+                             : 'border-white/10 opacity-50 cursor-not-allowed'
+                           }`}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl ${canUndo ? 'text-white group-hover:scale-110 transition-transform' : 'text-white/50'}`}>
+                      ↩
+                    </span>
+                    <span className={`font-medium ${canUndo ? 'text-white' : 'text-white/50'}`}>
+                      Undo
+                    </span>
+                  </div>
+                  <span className="text-xs text-white/70 mt-0.5">
+                    {navigator.platform.toLowerCase().includes('mac') ? '⌘Z' : 'Ctrl+Z'}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className={`bg-white/10 backdrop-blur-sm border px-4 py-2 rounded-xl
+                           transition-all duration-200 shadow-xl
+                           flex items-center justify-center gap-2 group
+                           ${canRedo 
+                             ? 'border-white/30 hover:bg-white/20 hover:border-white/40' 
+                             : 'border-white/10 opacity-50 cursor-not-allowed'
+                           }`}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl ${canRedo ? 'text-white group-hover:scale-110 transition-transform' : 'text-white/50'}`}>
+                      ↪
+                    </span>
+                    <span className={`font-medium ${canRedo ? 'text-white' : 'text-white/50'}`}>
+                      Redo
+                    </span>
+                  </div>
+                  <span className="text-xs text-white/70 mt-0.5">
+                    {navigator.platform.toLowerCase().includes('mac') ? '⌘⇧Z' : 'Ctrl+Y'}
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {/* Trump Suit indicator */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl
+                          border border-white/20 transition-all hover:scale-105">
+              <div className="text-white text-center">
+                <div className="text-lg font-medium text-white/80 mb-2">Trump Suit</div>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-3xl font-bold capitalize">{trumpSuit}</span>
+                  <span className={`text-4xl ${trumpSuit === 'hearts' || trumpSuit === 'diamonds' ? 'text-red-400' : 'text-white'}`}>
+                    {(() => {
+                      switch (trumpSuit) {
+                        case 'hearts': return '♥';
+                        case 'diamonds': return '♦';
+                        case 'clubs': return '♣';
+                        case 'spades': return '♠';
+                        default: return '';
+                      }
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Game phase and status */}
@@ -629,30 +736,6 @@ const GameBoard: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Trump suit indicator */}
-        {trumpSuit && (
-          <div className="fixed bottom-8 right-8 bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl
-                        border border-white/20 transition-all hover:scale-105 z-40">
-            <div className="text-white text-center">
-              <div className="text-lg font-medium text-white/80 mb-2">Trump Suit</div>
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-3xl font-bold capitalize">{trumpSuit}</span>
-                <span className={`text-4xl ${trumpSuit === 'hearts' || trumpSuit === 'diamonds' ? 'text-red-400' : 'text-white'}`}>
-                  {(() => {
-                    switch (trumpSuit) {
-                      case 'hearts': return '♥';
-                      case 'diamonds': return '♦';
-                      case 'clubs': return '♣';
-                      case 'spades': return '♠';
-                      default: return '';
-                    }
-                  })()}
-                </span>
-              </div>
             </div>
           </div>
         )}

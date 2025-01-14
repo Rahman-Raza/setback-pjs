@@ -8,6 +8,7 @@ const TutorialOverlay: React.FC = () => {
   const [highlightedElement, setHighlightedElement] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState<{ [key: string]: string }>({});
   const [lastGameState, setLastGameState] = useState(gameState);
+  const [isExiting, setIsExiting] = useState(false);
 
   const currentStep = tutorialState.steps[tutorialState.currentStepIndex];
 
@@ -137,82 +138,121 @@ const TutorialOverlay: React.FC = () => {
     };
   }, [tutorialState.isActive, updatePosition]);
 
+  const handleEndTutorial = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      endTutorial();
+      setIsExiting(false);
+    }, 200);
+  };
+
   if (!tutorialState.isActive || !currentStep) return null;
 
   return (
     <>
-      {/* Semi-transparent overlay */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40 pointer-events-none" />
+      {/* Backdrop overlay with blur */}
+      <div 
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-40 pointer-events-none
+                   transition-opacity duration-300 ease-in-out
+                   ${isExiting ? 'opacity-0' : 'opacity-100'}`} 
+      />
 
       {/* Highlight effect */}
       {highlightedElement && (
         <div
-          className="fixed z-50 pointer-events-none transition-all duration-200"
+          className={`fixed z-50 pointer-events-none
+                     transition-all duration-300 ease-in-out
+                     ${isExiting ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
           style={{
-            top: highlightedElement.getBoundingClientRect().top - 4,
-            left: highlightedElement.getBoundingClientRect().left - 4,
-            width: highlightedElement.getBoundingClientRect().width + 8,
-            height: highlightedElement.getBoundingClientRect().height + 8,
-            border: '2px solid white',
-            borderRadius: '8px',
-            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
+            top: highlightedElement.getBoundingClientRect().top - 8,
+            left: highlightedElement.getBoundingClientRect().left - 8,
+            width: highlightedElement.getBoundingClientRect().width + 16,
+            height: highlightedElement.getBoundingClientRect().height + 16,
+            background: 'linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(147, 197, 253, 0.1))',
+            border: '2px solid rgba(59, 130, 246, 0.5)',
+            borderRadius: '12px',
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5), 0 0 15px rgba(59, 130, 246, 0.3)',
           }}
         />
       )}
 
       {/* Tutorial box */}
       <div
-        className="fixed z-50 bg-white rounded-lg p-6 shadow-xl w-[400px] transition-all duration-200"
+        className={`fixed z-50 bg-white rounded-2xl p-8 shadow-2xl w-[450px]
+                   transition-all duration-300 ease-in-out
+                   ${isExiting ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
         style={position}
       >
-        <h3 className="text-xl font-bold mb-2">{currentStep.title}</h3>
-        <p className="text-gray-600 mb-4">{currentStep.content}</p>
+        {/* Content */}
+        <div className="mb-8">
+          {/* Step counter - moved inside and restyled */}
+          <div className="mb-4 inline-flex px-4 py-1.5 bg-blue-50 rounded-full">
+            <span className="text-sm font-semibold text-blue-600">
+              Step {tutorialState.currentStepIndex + 1} of {tutorialState.steps.length}
+            </span>
+          </div>
+          
+          <h3 className="text-2xl font-bold mb-4 text-gray-900 leading-tight">
+            {currentStep.title}
+          </h3>
+          <p className="text-gray-600 text-lg leading-relaxed">
+            {currentStep.content}
+          </p>
+        </div>
         
+        {/* Navigation */}
         <div className="flex justify-between items-center">
-          <div>
+          <div className="flex gap-3">
             <button
               onClick={previousStep}
               disabled={tutorialState.currentStepIndex === 0}
-              className={`mr-2 px-4 py-2 rounded ${
-                tutorialState.currentStepIndex === 0
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm
+                         transition-all duration-200 ease-in-out
+                         flex items-center gap-2
+                         ${tutorialState.currentStepIndex === 0
+                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                           : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                         }`}
             >
-              Previous
+              ← Previous
             </button>
             <button
               onClick={nextStep}
               disabled={tutorialState.currentStepIndex === tutorialState.steps.length - 1}
-              className={`px-4 py-2 rounded ${
-                tutorialState.currentStepIndex === tutorialState.steps.length - 1
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
-              }`}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm
+                         transition-all duration-200 ease-in-out
+                         flex items-center gap-2
+                         ${tutorialState.currentStepIndex === tutorialState.steps.length - 1
+                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                           : 'bg-blue-600 text-white hover:bg-blue-700'
+                         }`}
             >
-              Next
+              Next →
             </button>
           </div>
           <button
-            onClick={endTutorial}
-            className="text-gray-500 hover:text-gray-700"
+            onClick={handleEndTutorial}
+            className="text-gray-400 hover:text-gray-600 font-medium text-sm
+                     transition-colors duration-200"
           >
             Skip Tutorial
           </button>
         </div>
 
-        {/* Progress indicator */}
-        <div className="mt-4 flex justify-center">
-          {tutorialState.steps.map((_, index) => (
-            <div
-              key={index}
-              className={`w-2 h-2 rounded-full mx-1 ${
-                index === tutorialState.currentStepIndex
-                  ? 'bg-blue-500'
-                  : 'bg-gray-300'
-              }`}
-            />
-          ))}
+        {/* Progress dots */}
+        <div className="absolute -bottom-10 left-0 right-0">
+          <div className="flex justify-center items-center gap-2">
+            {tutorialState.steps.map((_, index) => (
+              <div
+                key={index}
+                className={`w-2 h-2 rounded-full transition-all duration-200
+                           ${index === tutorialState.currentStepIndex
+                             ? 'bg-blue-500 w-4'
+                             : 'bg-white/50'
+                           }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </>
