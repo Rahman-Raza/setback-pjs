@@ -499,47 +499,6 @@ const GameBoard: React.FC = () => {
 
                 {/* Menu Items */}
                 <div className="flex-1 px-6 py-8 space-y-4 overflow-y-auto">
-                  {/* Undo/Redo Controls */}
-                  <div className="flex gap-3 mb-2">
-                    <button
-                      onClick={undo}
-                      disabled={!canUndo}
-                      className={`flex-1 bg-white border px-4 py-3 rounded-xl
-                               transition-all duration-200 shadow-sm
-                               flex items-center justify-center gap-2 group
-                               ${canUndo 
-                                 ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-md' 
-                                 : 'border-gray-100 opacity-50 cursor-not-allowed'
-                               }`}
-                    >
-                      <span className={`text-xl ${canUndo ? 'text-gray-600 group-hover:scale-110 transition-transform' : 'text-gray-400'}`}>
-                        ↩
-                      </span>
-                      <span className={`font-medium ${canUndo ? 'text-gray-700' : 'text-gray-400'}`}>
-                        Undo
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={redo}
-                      disabled={!canRedo}
-                      className={`flex-1 bg-white border px-4 py-3 rounded-xl
-                               transition-all duration-200 shadow-sm
-                               flex items-center justify-center gap-2 group
-                               ${canRedo 
-                                 ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50 hover:shadow-md' 
-                                 : 'border-gray-100 opacity-50 cursor-not-allowed'
-                               }`}
-                    >
-                      <span className={`text-xl ${canRedo ? 'text-gray-600 group-hover:scale-110 transition-transform' : 'text-gray-400'}`}>
-                        ↪
-                      </span>
-                      <span className={`font-medium ${canRedo ? 'text-gray-700' : 'text-gray-400'}`}>
-                        Redo
-                      </span>
-                    </button>
-                  </div>
-
                   <button
                     onClick={() => {
                       setShowSidebar(false);
@@ -662,6 +621,88 @@ const GameBoard: React.FC = () => {
           </>
         )}
 
+        {/* Add undo/redo controls above Trump Suit */}
+        {trumpSuit && (
+          <div className="fixed bottom-8 right-8 flex flex-col gap-4 z-40">
+            {/* Undo/Redo Controls */}
+            <div className="flex gap-2">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className={`bg-white/10 backdrop-blur-sm border px-4 py-2 rounded-xl
+                           transition-all duration-200 shadow-xl
+                           flex items-center justify-center gap-2 group
+                           ${canUndo 
+                             ? 'border-white/30 hover:bg-white/20 hover:border-white/40' 
+                             : 'border-white/10 opacity-50 cursor-not-allowed'
+                           }`}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl ${canUndo ? 'text-white group-hover:scale-110 transition-transform' : 'text-white/50'}`}>
+                      ↩
+                    </span>
+                    <span className={`font-medium ${canUndo ? 'text-white' : 'text-white/50'}`}>
+                      Undo
+                    </span>
+                  </div>
+                  <span className="text-xs text-white/70 mt-0.5">
+                    {navigator.platform.toLowerCase().includes('mac') ? '⌘Z' : 'Ctrl+Z'}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className={`bg-white/10 backdrop-blur-sm border px-4 py-2 rounded-xl
+                           transition-all duration-200 shadow-xl
+                           flex items-center justify-center gap-2 group
+                           ${canRedo 
+                             ? 'border-white/30 hover:bg-white/20 hover:border-white/40' 
+                             : 'border-white/10 opacity-50 cursor-not-allowed'
+                           }`}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl ${canRedo ? 'text-white group-hover:scale-110 transition-transform' : 'text-white/50'}`}>
+                      ↪
+                    </span>
+                    <span className={`font-medium ${canRedo ? 'text-white' : 'text-white/50'}`}>
+                      Redo
+                    </span>
+                  </div>
+                  <span className="text-xs text-white/70 mt-0.5">
+                    {navigator.platform.toLowerCase().includes('mac') ? '⌘⇧Z' : 'Ctrl+Y'}
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            {/* Trump Suit indicator */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl
+                          border border-white/20 transition-all hover:scale-105">
+              <div className="text-white text-center">
+                <div className="text-lg font-medium text-white/80 mb-2">Trump Suit</div>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-3xl font-bold capitalize">{trumpSuit}</span>
+                  <span className={`text-4xl ${trumpSuit === 'hearts' || trumpSuit === 'diamonds' ? 'text-red-400' : 'text-white'}`}>
+                    {(() => {
+                      switch (trumpSuit) {
+                        case 'hearts': return '♥';
+                        case 'diamonds': return '♦';
+                        case 'clubs': return '♣';
+                        case 'spades': return '♠';
+                        default: return '';
+                      }
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Game phase and status */}
         {players.length > 0 && (
           <div className="flex justify-between items-start gap-8 mb-8">
@@ -695,30 +736,6 @@ const GameBoard: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Trump suit indicator */}
-        {trumpSuit && (
-          <div className="fixed bottom-8 right-8 bg-white/10 backdrop-blur-sm rounded-2xl p-6 shadow-xl
-                        border border-white/20 transition-all hover:scale-105 z-40">
-            <div className="text-white text-center">
-              <div className="text-lg font-medium text-white/80 mb-2">Trump Suit</div>
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-3xl font-bold capitalize">{trumpSuit}</span>
-                <span className={`text-4xl ${trumpSuit === 'hearts' || trumpSuit === 'diamonds' ? 'text-red-400' : 'text-white'}`}>
-                  {(() => {
-                    switch (trumpSuit) {
-                      case 'hearts': return '♥';
-                      case 'diamonds': return '♦';
-                      case 'clubs': return '♣';
-                      case 'spades': return '♠';
-                      default: return '';
-                    }
-                  })()}
-                </span>
-              </div>
             </div>
           </div>
         )}
