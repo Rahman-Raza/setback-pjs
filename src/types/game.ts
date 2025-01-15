@@ -18,6 +18,7 @@ export interface Player {
 export interface Partnership {
   players: [Player, Player];
   score: number;
+  teamName?: string;
 }
 
 export interface Bid {

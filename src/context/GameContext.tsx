@@ -13,6 +13,7 @@ interface GameContextType {
   exportGameState: () => void;
   importGameState: (file: File) => void;
   updatePlayerName: (playerId: string, newName: string) => void;
+  updateTeamName: (partnershipIndex: number, newName: string) => void;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -119,7 +120,8 @@ type GameAction =
   | { type: 'PLACE_BID'; payload: Bid }
   | { type: 'PLAY_CARD'; payload: { playerId: string; card: Card } }
   | { type: 'COMPLETE_TRICK' }
-  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } };
+  | { type: 'UPDATE_PLAYER_NAME'; payload: { playerId: string; newName: string } }
+  | { type: 'UPDATE_TEAM_NAME'; payload: { partnershipIndex: number; newName: string } };
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -423,6 +425,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case 'UPDATE_TEAM_NAME': {
+      const { partnershipIndex, newName } = action.payload;
+      const newPartnerships = [...state.partnerships] as [Partnership, Partnership];
+      newPartnerships[partnershipIndex] = {
+        ...newPartnerships[partnershipIndex],
+        teamName: newName
+      };
+      
+      return {
+        ...state,
+        partnerships: newPartnerships
+      };
+    }
+
     default:
       return state;
   }
@@ -716,6 +732,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const updateTeamName = (partnershipIndex: number, newName: string) => {
+    dispatch({ 
+      type: 'NORMAL',
+      action: { 
+        type: 'UPDATE_TEAM_NAME', 
+        payload: { partnershipIndex, newName } 
+      }
+    });
+  };
+
   // Update the provider value to include undo/redo
   const providerValue = {
     state,
@@ -728,6 +754,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     exportGameState,
     importGameState,
     updatePlayerName,
+    updateTeamName,
     undo,
     redo,
     canUndo: past.length > 0,
