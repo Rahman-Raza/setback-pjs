@@ -8,6 +8,7 @@ import PlayerNameForm from './PlayerNameForm';
 import EditPlayerName from './EditPlayerName';
 import TrickAnimation from './TrickAnimation';
 import GameHistoryViewer from './GameHistoryViewer';
+import EditTeamName from './EditTeamName';
 
 interface CardProps {
   card: CardType;
@@ -266,6 +267,7 @@ const GameBoard: React.FC = () => {
     exportGameState,
     importGameState,
     updatePlayerName,
+    updateTeamName,
     undo,
     redo,
     canUndo,
@@ -280,6 +282,7 @@ const GameBoard: React.FC = () => {
   const [showTrickAnimation, setShowTrickAnimation] = useState(false);
   const [trickWinner, setTrickWinner] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<{ partnership: Partnership; index: number } | null>(null);
 
   const handleStartGame = (playerNames: string[]) => {
     console.log('Starting game with players:', playerNames);
@@ -449,6 +452,11 @@ const GameBoard: React.FC = () => {
 
     const firstPlayer = (state.currentDealer + 1) % 4;
     return (firstPlayer + winningIndex) % 4;
+  };
+
+  const handleEditTeamName = (partnershipIndex: number, newName: string) => {
+    updateTeamName(partnershipIndex, newName);
+    setEditingTeam(null);
   };
 
   return (
@@ -761,8 +769,16 @@ const GameBoard: React.FC = () => {
                  className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl 
                   border border-white/20 transition-all duration-300 
                   hover:bg-white/15 hover:scale-102">
-              <div className="text-xl font-semibold mb-3 text-white/90 uppercase tracking-wider">
-                Partnership {index + 1}
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => setEditingTeam({ partnership, index })}
+                  className="text-white/90 hover:text-white transition-all duration-200 
+                           flex items-center gap-2 px-4 py-2 rounded-lg 
+                           hover:bg-white/10 font-medium tracking-wide"
+                >
+                  <span className="text-2xl font-semibold">{partnership.teamName || `Team ${index + 1}`}</span>
+                  <span className="text-sm opacity-60 group-hover:opacity-100">✎</span>
+                </button>
               </div>
               <div className="text-5xl font-extrabold mb-5 bg-gradient-to-r from-white via-white/95 to-white/80 bg-clip-text text-transparent tracking-tight">
                 {partnership.score} points
@@ -962,6 +978,16 @@ const GameBoard: React.FC = () => {
         />
 
         <TutorialOverlay />
+
+        {/* Edit team name dialog */}
+        {editingTeam && (
+          <EditTeamName
+            partnership={editingTeam.partnership}
+            partnershipIndex={editingTeam.index}
+            onSave={handleEditTeamName}
+            onCancel={() => setEditingTeam(null)}
+          />
+        )}
       </div>
     </div>
   );
